@@ -7,7 +7,8 @@ client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 def upload_tcx_file(filepath):
     print(f"📤 Uploaduję plik: {filepath}")
     with open(filepath, "rb") as f:
-        file = client.files.create(file=f, purpose="assistants")
+        file = client.files.create(file=f, purpose="assistants", file_name="activity.xml")
+
     return file.id
 
 def ask_gpt_with_file(file_id):
