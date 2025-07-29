@@ -7,7 +7,6 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 def upload_tcx_file(filepath):
     print(f"📤 Uploaduję plik: {filepath}")
 
-    # Konwertuj na .xml (bo OpenAI nie akceptuje .tcx)
     temp_path = "temp_upload.xml"
     with open(filepath, "rb") as src, open(temp_path, "wb") as dst:
         dst.write(src.read())
@@ -19,34 +18,31 @@ def upload_tcx_file(filepath):
     return file.id
 
 def ask_gpt_with_file(file_id):
-    print("🤖 Tworzę asystenta GPT do analizy TCX...")
+    print("🤖 Tworzę wiadomość z plikiem TCX do analizy...")
 
-    assistant = client.beta.assistants.create(
-        name="Treningowy Analizator TCX",
-        instructions=(
-            "Jesteś trenerem biegowym. Analizujesz dane z pliku TCX. "
-            "Podaj dystans, czas, średnie tempo, tętno, przewyższenia i interwały (jeśli są). "
-            "Oceń intensywność i wykonanie treningu. Dodaj 1-zdaniowy komentarz motywacyjny."
-        ),
-        tools=[{"type": "file_search"}],
-        model="gpt-4o"
-    )
-
+    # 🔁 Utwórz wątek
     thread = client.beta.threads.create()
 
+    # 📨 Dodaj wiadomość z plikiem
     client.beta.threads.messages.create(
         thread_id=thread.id,
         role="user",
-        content="Załączam plik TCX do analizy treningu."
-    )
-
-    run = client.beta.threads.runs.create(
-        thread_id=thread.id,
-        assistant_id=assistant.id,
+        content="Załączam plik TCX do analizy treningu.",
         file_ids=[file_id]
     )
 
-    print("⏳ Czekam na analizę GPT...")
+    # ▶️ Uruchom GPT z modelem gpt-4-o (lub gpt-3.5-turbo jeśli wolisz)
+    run = client.beta.threads.runs.create(
+        thread_id=thread.id,
+        model="gpt-4o",
+        instructions=(
+            "Jesteś ekspertem od biegania. "
+            "Analizuj dane z pliku TCX: dystans, czas, tempo, interwały, tętno, przewyższenia. "
+            "Na końcu dodaj 1-zdaniowy komentarz motywacyjny."
+        )
+    )
+
+    print("⏳ Czekam na odpowiedź GPT...")
     while True:
         run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
         if run.status == "completed":
