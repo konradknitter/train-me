@@ -2,72 +2,100 @@ import os
 import time
 from openai import OpenAI
 
+# ✅ Ustaw swój klucz API
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-def upload_tcx_file(filepath):
+ASSISTANT_NAME = "TreningowyAnalizator"
+VECTOR_STORE_NAME = "tcx_vector_store"
+
+def upload_file_to_openai(filepath):
     print(f"📤 Uploaduję plik: {filepath}")
-
-    temp_path = "temp_upload.xml"
-    with open(filepath, "rb") as src, open(temp_path, "wb") as dst:
-        dst.write(src.read())
-
-    with open(temp_path, "rb") as f:
+    with open(filepath, "rb") as f:
         file = client.files.create(file=f, purpose="assistants")
+    return file
 
-    print(f"✅ Upload zakończony. file_id: {file.id}")
-    return file.id
+def get_or_create_vector_store():
+    stores = client.beta.vector_stores.list().data
+    for store in stores:
+        if store.name == VECTOR_STORE_NAME:
+            return store
+    return client.beta.vector_stores.create(name=VECTOR_STORE_NAME)
 
-def ask_gpt_with_file(file_id):
-    print("🤖 Tworzę wiadomość z plikiem TCX do analizy...")
-
-    # 🔁 Utwórz wątek
-    thread = client.beta.threads.create()
-
-    # 📨 Dodaj wiadomość z plikiem
-    client.beta.threads.messages.create(
-        thread_id=thread.id,
-        role="user",
-        content="Załączam plik TCX do analizy treningu.",
+def attach_file_to_vector_store(vector_store_id, file_id):
+    client.beta.vector_stores.file_batches.create(
+        vector_store_id=vector_store_id,
         file_ids=[file_id]
     )
 
-    # ▶️ Uruchom GPT z modelem gpt-4-o (lub gpt-3.5-turbo jeśli wolisz)
-    run = client.beta.threads.runs.create(
-        thread_id=thread.id,
-        model="gpt-4o",
+def get_or_create_assistant(vector_store_id):
+    assistants = client.beta.assistants.list().data
+    for assistant in assistants:
+        if assistant.name == ASSISTANT_NAME:
+            return assistant
+    return client.beta.assistants.create(
+        name=ASSISTANT_NAME,
         instructions=(
-            "Jesteś ekspertem od biegania. "
-            "Analizuj dane z pliku TCX: dystans, czas, tempo, interwały, tętno, przewyższenia. "
-            "Na końcu dodaj 1-zdaniowy komentarz motywacyjny."
-        )
+            "Jesteś trenerem biegowym. Analizuj dane z pliku TCX (trening biegowy): "
+            "podaj dystans, czas, tempo, tętno, przewyższenia, interwały. "
+            "Na końcu dodaj motywacyjny komentarz."
+        ),
+        tools=[{"type": "file_search"}],
+        tool_resources={"file_search": {"vector_store_ids": [vector_store_id]}},
+        model="gpt-4o"
     )
 
-    print("⏳ Czekam na odpowiedź GPT...")
+def analyze_tcx_with_assistant(assistant_id):
+    thread = client.beta.threads.create()
+
+    client.beta.threads.messages.create(
+        thread_id=thread.id,
+        role="user",
+        content="Proszę przeanalizuj mój trening z załączonego pliku TCX."
+    )
+
+    run = client.beta.threads.runs.create(
+        thread_id=thread.id,
+        assistant_id=assistant_id,
+    )
+
+    print("⏳ GPT analizuje plik...")
     while True:
         run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
         if run.status == "completed":
             break
         elif run.status in ["failed", "expired"]:
-            raise Exception(f"❌ Błąd: run zakończony jako {run.status}")
+            raise Exception(f"❌ Run nie powiódł się: {run.status}")
         time.sleep(2)
 
     messages = client.beta.threads.messages.list(thread_id=thread.id)
-    latest = messages.data[0].content[0].text.value.strip()
-    return latest
+    return messages.data[0].content[0].text.value.strip()
 
 def main():
+    # 🔍 Znajdź najnowszy .tcx
     files = sorted([f for f in os.listdir() if f.endswith(".tcx")], reverse=True)
     if not files:
-        print("❌ Nie znaleziono żadnego pliku .tcx.")
+        print("❌ Nie znaleziono pliku .tcx.")
         return
 
     tcx_file = files[0]
     print(f"📂 Analizuję plik: {tcx_file}")
 
-    file_id = upload_tcx_file(tcx_file)
-    summary = ask_gpt_with_file(file_id)
+    # ✅ Upload
+    file = upload_file_to_openai(tcx_file)
 
-    print("🧠 Odpowiedź GPT:")
+    # 🧠 Utwórz lub znajdź vector store
+    vector_store = get_or_create_vector_store()
+
+    # 📎 Podłącz plik
+    attach_file_to_vector_store(vector_store.id, file.id)
+
+    # 🤖 Utwórz lub pobierz assistant
+    assistant = get_or_create_assistant(vector_store.id)
+
+    # 🗣️ Poproś GPT o analizę
+    summary = analyze_tcx_with_assistant(assistant.id)
+
+    print("🧠 Odpowiedź GPT:\n")
     print(summary)
 
     with open("summary.txt", "w") as f:
