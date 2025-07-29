@@ -34,7 +34,7 @@ jobs:
       run: python summarize_tcx_gpt.py
 
     - name: Dołącz pliki jako artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: strava-results
         path: |
