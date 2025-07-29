@@ -30,7 +30,7 @@ def get_latest_activity(access_token):
 def get_streams(activity_id, access_token):
     headers = {"Authorization": f"Bearer {access_token}"}
     url = f"https://www.strava.com/api/v3/activities/{activity_id}/streams"
-    params = {"keys": "time,latlng,heartrate", "key_by_type": "true"}
+    params = {"keys": "time,distance,latlng,altitude,velocity_smooth,heartrate,cadence,watts,temp,moving,grade_smooth, "key_by_type": "true"}
     resp = requests.get(url, headers=headers, params=params)
     return resp.json()
 
