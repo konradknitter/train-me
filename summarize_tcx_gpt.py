@@ -29,7 +29,7 @@ def ask_gpt_with_file(file_id):
             "Oceń intensywność i wykonanie treningu. Dodaj 1-zdaniowy komentarz motywacyjny."
         ),
         tools=[{"type": "file_search"}],
-        model="gpt-4-o"
+        model="gpt-4o"
     )
 
     thread = client.beta.threads.create()
