@@ -27,3 +27,16 @@ jobs:
         STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
         STRAVA_REFRESH_TOKEN: ${{ secrets.STRAVA_REFRESH_TOKEN }}
       run: python strava_sync_tcx_env.py
+
+    - name: Podsumuj trening przez GPT
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: python summarize_tcx_gpt.py
+
+    - name: Dołącz pliki jako artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: strava-results
+        path: |
+          *.tcx
+          summary.txt
