@@ -3,11 +3,18 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 import openai
 
-openai.api_key = os.getenv("OPENAI_API_KEY")  # Ustaw w GitHub Secrets
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def extract_summary_from_tcx(tcx_path):
     ns = {"tcx": "http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"}
-    tree = ET.parse(tcx_path)
+
+    with open(tcx_path, "r", encoding="utf-8") as f:
+        content = f.read()
+        print("📄 ----- ZAWARTOŚĆ TCX -----")
+        print(content)
+        print("📄 ----- KONIEC ZAWARTOŚCI -----")
+
+    tree = ET.ElementTree(ET.fromstring(content))
     root = tree.getroot()
 
     times = []
@@ -20,14 +27,21 @@ def extract_summary_from_tcx(tcx_path):
         hr_el = tp.find("tcx:HeartRateBpm/tcx:Value", ns)
 
         if time_el is not None:
-            times.append(datetime.fromisoformat(time_el.text.replace("Z", "")))
+            try:
+                times.append(datetime.fromisoformat(time_el.text.replace("Z", "")))
+            except Exception as e:
+                print(f"⚠️ Błąd parsowania czasu: {e}")
         if dist_el is not None:
             distances.append(float(dist_el.text))
         if hr_el is not None:
             heart_rates.append(int(hr_el.text))
 
-    if not times or not distances:
-        raise ValueError("Nie udało się znaleźć danych GPS lub czasu w pliku TCX.")
+    if not times:
+        print("❌ Brak znaczników czasu – brak danych GPS?")
+        return None
+    if not distances:
+        print("❌ Brak dystansu – prawdopodobnie brak trackpointów.")
+        return None
 
     duration_min = round((times[-1] - times[0]).total_seconds() / 60)
     distance_km = round(max(distances) / 1000, 2)
@@ -57,16 +71,19 @@ Dodaj motywacyjny komentarz (1 zdanie)."""
     return response.choices[0].message.content.strip()
 
 def main():
-    # Szukaj ostatniego TCX w katalogu
     files = sorted([f for f in os.listdir() if f.endswith(".tcx")], reverse=True)
     if not files:
-        print("❌ Nie znaleziono żadnego pliku .tcx w katalogu.")
+        print("❌ Nie znaleziono żadnego pliku .tcx.")
         return
 
     latest_tcx = files[0]
-    print(f"📂 Przetwarzam plik: {latest_tcx}")
+    print(f"📂 Analizuję plik: {latest_tcx}")
 
     summary = extract_summary_from_tcx(latest_tcx)
+    if not summary:
+        print("⚠️ Brak wystarczających danych – pomijam analizę.")
+        return
+
     gpt_response = ask_gpt_for_summary(summary)
 
     print("🧠 Podsumowanie GPT:")
