@@ -20,35 +20,53 @@ def upload_tcx_file(filepath):
     return file.id
 
 def ask_gpt_with_file(file_id):
-    print(f"🤖 Wysyłam zapytanie do GPT z plikiem ID: {file_id}")
-    prompt = (
-        "Przeanalizuj ten plik TCX i podsumuj mój trening biegowy. "
-        "Wypisz dystans, czas, tempo, tętno, przewyższenia i ogólną jakość treningu. "
-        "Zakończ krótkim motywacyjnym komentarzem."
+    print(f"🤖 Tworzę asystenta GPT do analizy TCX...")
+
+    # Stwórz asystenta, który będzie analizował pliki XML/TCX
+    assistant = client.beta.assistants.create(
+        name="Treningowy Analizator TCX",
+        instructions=(
+            "Jesteś ekspertem od biegania. "
+            "Na podstawie danych TCX oceń bieg: dystans, czas, tempo, intensywność, tętno, interwały, przewyższenia. "
+            "Zakończ krótkim motywacyjnym komentarzem."
+        ),
+        tools=[{"type": "file_search"}],
+        model="gpt-4-turbo"
     )
 
+    # Utwórz nowy wątek
     thread = client.beta.threads.create()
+
+    # Dodaj wiadomość użytkownika (bez file_ids!)
     client.beta.threads.messages.create(
         thread_id=thread.id,
         role="user",
-        content=prompt,
+        content="Załączam plik TCX do analizy treningu.",
+    )
+
+    # Uruchom analizę (asystent + plik)
+    run = client.beta.threads.runs.create(
+        thread_id=thread.id,
+        assistant_id=assistant.id,
         file_ids=[file_id]
     )
 
-    run = client.beta.threads.runs.create(thread_id=thread.id, assistant_id=None, model="gpt-4-turbo")
-
-    # Czekaj na zakończenie
+    # Poczekaj aż GPT zakończy analizę
+    import time
     while True:
         run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
         if run.status == "completed":
             break
-        elif run.status in ["failed", "cancelled", "expired"]:
-            raise Exception(f"❌ Błąd run: {run.status}")
-        import time; time.sleep(2)
+        elif run.status in ["failed", "expired"]:
+            raise Exception(f"❌ Run zakończony błędem: {run.status}")
+        print("⏳ Czekam na odpowiedź GPT...")
+        time.sleep(2)
 
+    # Pobierz odpowiedź
     messages = client.beta.threads.messages.list(thread_id=thread.id)
-    answer = messages.data[0].content[0].text.value.strip()
-    return answer
+    latest = messages.data[0].content[0].text.value.strip()
+
+    return latest
 
 def main():
     # Szukamy najnowszego pliku .tcx
