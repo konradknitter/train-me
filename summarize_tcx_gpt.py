@@ -10,8 +10,15 @@ VECTOR_STORE_NAME = "tcx_vector_store"
 
 def upload_file_to_openai(filepath):
     print(f"📤 Uploaduję plik: {filepath}")
-    with open(filepath, "rb") as f:
+
+    temp_path = "temp_upload.xml"
+    with open(filepath, "rb") as src, open(temp_path, "wb") as dst:
+        dst.write(src.read())
+
+    with open(temp_path, "rb") as f:
         file = client.files.create(file=f, purpose="assistants")
+
+    print(f"✅ Upload zakończony. file_id: {file.id}")
     return file
 
 def get_or_create_vector_store():
