@@ -1,6 +1,9 @@
 import os
 import time
 from openai import OpenAI
+from dotenv import load_dotenv  # <-- dodano
+
+load_dotenv()  # <-- dodano
 
 # ✅ Ustaw swój klucz API
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -51,6 +54,7 @@ def get_or_create_assistant(vector_store_id):
         model="gpt-4o"
     )
 
+
 def analyze_tcx_with_assistant(assistant_id):
     thread = client.beta.threads.create()
 
@@ -96,17 +100,18 @@ def main():
     # 📎 Podłącz plik
     attach_file_to_vector_store(vector_store.id, file.id)
 
-    # 🤖 Utwórz lub pobierz assistant
-    assistant = get_or_create_assistant(vector_store.id)
+    response = client.responses.create(
+        model="gpt-4o",
+        instructions="Jesteś trenerem biegowym. Analizuj dane z pliku TCX (trening biegowy): "
+            "podaj dystans, czas, tempo, tętno, przewyższenia, interwały. "
+            "Na końcu dodaj motywacyjny komentarz.",
+        input="How do I check if a Python object is an instance of a class?",
+    )
 
-    # 🗣️ Poproś GPT o analizę
-    summary = analyze_tcx_with_assistant(assistant.id)
-
-    print("🧠 Odpowiedź GPT:\n")
-    print(summary)
+    print(response.output_text)
 
     with open("summary.txt", "w") as f:
-        f.write(summary)
+        f.write(response.output_text)
     print("✅ Zapisano do summary.txt")
 
 if __name__ == "__main__":
